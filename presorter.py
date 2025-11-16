@@ -19,6 +19,7 @@ import save_cat as sc
 import setup as su
 import manager as ma  
 import einsortieren as es
+import duplicate_detection as dd
 
 
 def run_as_admin():
@@ -258,6 +259,13 @@ if run_as_admin():
                                             command= lambda: es.kategorisierung_entfernen(self.image_folder) ,
                                             style="Warning Button")
             add_category_button.pack(side=tk.TOP,padx=5,pady=5)
+
+            #button to check for duplicates
+            add_duplicate_button = ttkb.Button(self.button_frame_add, 
+                                            text="Duplikatprüfung", 
+                                            command= lambda: dd.run_duplicate_check_gui(self.image_folder) ,
+                                            style="Warning Button")
+            add_duplicate_button.pack(side=tk.TOP,padx=5,pady=5)
 
             #button to save categories to csv
             add_category_button = ttkb.Button(self.button_frame, 
