@@ -1,7 +1,9 @@
 #geschrieben von Silas Sinning in 2023
 #zum ersten Mal mit KI-Ünterstützung (ChatGPT-3)
 
+#2025 wurde die AI-Integration hinzugefügt
 
+#fremdimporte
 import os
 import sys
 import tkinter as tk
@@ -11,7 +13,7 @@ import ttkbootstrap as ttkb
 import threading
 import csv
 import time
-import ctypes
+import json
 
 
 #eigene importe
@@ -20,32 +22,29 @@ import setup as su
 import manager as ma  
 import einsortieren as es
 import duplicate_detection as dd
+import clip_classifier as cc
+ 
 
 
-
-
-
-
-print("Das Skript wird mit Administratorrechten ausgeführt.")
 
 if getattr(sys, 'frozen', False):
-    # Wenn das Skript in einer EXE-Datei gepackt ist
+    # if script is packed into an exe
     application_path = os.path.dirname(os.path.abspath(sys.argv[0]))
     os.chdir(application_path)
 
     print(application_path)
 
 else:
-    # Wenn das Skript normal ausgeführt wird
+    # if its run normally
     application_path = os.path.dirname(os.path.abspath(__file__))
 
     print(application_path)
 
 csv_file_path = os.path.join(application_path, 'Kategorien.csv')
 
-# Check if the file exists
+# check if the file exists
 if not os.path.exists(csv_file_path):
-    # If it doesn't exist, create the file
+    # if it doesn't, create the file
     with open(csv_file_path, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file)
 
@@ -57,11 +56,17 @@ class Presorter:
         self.root.title("Bildsortierung")
         self.image_folder = None
 
+        self.clip_results_folder = None  # hier clip_results.json finden
+        self.clip_results_loaded = False
+
         #this is for knowing when the setup is done to start building the window
         self.setup_done = threading.Event()
         self.buttons = []
         #set up fullscreen mode
         self.root.attributes('-fullscreen', True)
+
+        #key combinations
+
         self.root.bind("<Escape>", self.toggle_fullscreen)
         self.root.bind("<Return>", lambda event=None: self.add_new_category())
         #self.root.bind("<Right>", lambda event=None: self.skip_image())
@@ -83,7 +88,7 @@ class Presorter:
         
         if not ma.categories:
             print("Keine Kategorien geladen. Voreinstellungsliste wird geladen.")
-            self.categories = ["Sonstiges","Screenshots","Landschaften","Dokumente","Memes"]
+            self.categories = ["Gruppen","Screenshots","Landschaften","Dokumente","Memes","Portraits"]
         else:
             
             if ma.count_letters_and_entries(ma.categories)>130:
@@ -219,18 +224,26 @@ class Presorter:
         progress_label.pack(pady=0)
 
 
-        # Create a progress bar variable
+        # progress bar variable
         self.progress_var = tk.IntVar()
         self.progress_var.set(50)
 
         #self.progress_bar_.update()
 
-        # Create a progress bar widget
+        # progress bar widget
         self.progress_bar = ttk.Progressbar(self.frame_prog, variable=self.progress_var, mode="determinate", length=self.button_frame_add.winfo_width(),style="success.Horizontal.TProgressbar")
         self.progress_bar.pack(pady=10)
 
         self.frame_name_outer = ttk.Label(self.frame_name_outer, text= "NAME DES BILDES" ) #### ist ja klar was hier hin soll xD
         self.frame_name_outer.pack(pady=10)
+
+        btn_new_folder = ttkb.Button(
+            self.button_frame_add,
+            text="Anderen Ordner öffnen",
+            command=self.load_images,           
+            style="Info.TButton"
+        )
+        btn_new_folder.pack(side=tk.TOP, padx=5, pady=5)
 
         #button to create folders 
         add_category_button = ttkb.Button(self.button_frame_add, 
@@ -260,6 +273,34 @@ class Presorter:
                                         style="Warning Button")
         add_duplicate_button.pack(side=tk.TOP,padx=5,pady=5)
 
+        add_clip_button = ttkb.Button(
+            self.button_frame_add,
+            text="CLIP-Kategorienvorschau",
+            command=lambda: cc.run_clip_classification_gui(
+                self.image_folder,
+                csv_file_path,
+                parent=self.root,
+                max_images=None,
+                on_open_category_folder=self.set_image_folder,
+                load_fine_tuned=True,
+                fine_tuned_path='fine_tuned_clip.pt',
+                on_clip_finished=lambda folder=self.image_folder: self._on_clip_finished(folder)
+            ),
+            style="Info.TButton"
+        )
+        add_clip_button.pack(side=tk.TOP, padx=5, pady=5)
+
+
+        # AI labeling accept button
+        self.accept_ai_button = ttkb.Button(
+            self.button_frame_add,
+            text="AI-Labelling akzeptieren",
+            command=self.accept_ai_labelling,
+            style="Success.TButton", 
+            state=tk.DISABLED  # deaktiviert bis CLIP fertig
+        )
+        self.accept_ai_button.pack(side=tk.TOP, padx=5, pady=5)
+
         #button to save categories to csv
         add_category_button = ttkb.Button(self.button_frame, 
                                         text="Kategorien speichern", 
@@ -287,14 +328,14 @@ class Presorter:
         skip_image_icon = PhotoImage(file="icons/skip.png")
         
         rotate_button = ttkb.Button(self.frame_prog_outer, padding=0,image=rotate_image_icon, command=self.rotate_image, style="Info.TButton")
-        rotate_button.image = rotate_image_icon  # Speichern Sie eine Referenz auf das Bild, um Garbage Collection zu verhindern
+        rotate_button.image = rotate_image_icon  # Referenz auf das Bild, um Garbage Collection zu verhindern
         rotate_button.pack(side=tk.TOP, padx=5, pady=(5,5), anchor="w")
 
         rotate_label = ttkb.Label(self.frame_prog_outer, text="Bild drehen \n(Strg + R)", style="TLabel")
         rotate_label.pack(pady=0, side=tk.TOP, anchor="w")
 
         return_button = ttkb.Button(self.frame_prog_outer,padding=0, image=return_image_icon, command=self.undo_last_action, style="Info.TButton")
-        return_button.image = return_image_icon  # Speichern Sie eine Referenz auf das Bild, um Garbage Collection zu verhindern
+        return_button.image = return_image_icon  # Referenz auf das Bild, um Garbage Collection zu verhindern
         return_button.pack(side=tk.TOP, padx=5, pady=(20,5), anchor="w")
 
         return_label = ttkb.Label(self.frame_prog_outer, text="Vorheriges Bild \n(Pfeiltaste links)", style="TLabel")
@@ -327,13 +368,13 @@ class Presorter:
                     image.thumbnail(thumbnail_size)
                     photo = ImageTk.PhotoImage(image)
                     label.config(image=photo)
-                    label.image = photo  # Speichere die Referenz, um Garbage Collection zu verhindern
+                    label.image = photo  # Speichere die Referenz
                 except FileNotFoundError:
                     print(f"Datei nicht gefunden: {image_path}")
             else:
                 # Es gibt kein Bild für dieses Label, setze es zurück
                 label.config(image=None)
-                label.image = None  # Entferne die Referenz, um Garbage Collection zu ermöglichen
+                label.image = None  # Entferne die Referenz
 
 
     def update_thumbnails_left(self):
@@ -357,7 +398,7 @@ class Presorter:
             else:
                 # wenn nicht genug bilder, setze die restlichen Labels zurück
                 label.config(image=None)
-                label.image = None  # Entferne die Referenz, um Garbage Collection zu ermöglichen
+                label.image = None  # Entferne die Referenz
 
     
     def undo_last_action(self):
@@ -405,10 +446,40 @@ class Presorter:
         self.root.attributes('-fullscreen', state)
             
     def load_images(self):
-        self.image_folder = filedialog.askdirectory(title="Wähle einen Ordner mit Bildern")
-        if self.image_folder:
-            self.image_files = [f for f in os.listdir(self.image_folder) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-            self.show_image()
+        folder = filedialog.askdirectory(title="Wähle einen Ordner mit Bildern")
+        if folder:
+            self.set_image_folder(folder)
+
+    def set_image_folder(self, folder_path: str):
+        #Setzt den Arbeitsordner
+        if not folder_path or not os.path.isdir(folder_path):
+            messagebox.showwarning("Ordner auswählen", "Kein gültiger Bilderordner.", parent=self.root)
+            return
+
+        self.image_folder = folder_path
+        self.image_files = [
+            f for f in os.listdir(self.image_folder)
+            if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"))
+        ]
+        self.image_files.sort()
+
+        #alles neu initialisieren damit nichts schief geht 
+        self.current_index = 0
+        self.action_history = []
+        self.last_used_category = None
+
+        if not self.image_files:
+            self.label.config(image=None)
+            self.update_image_name("Keine Bilder gefunden")
+            self.progress_var.set(0)
+            return
+
+        self.show_image()
+        self.update_thumbnails_left()
+        self.update_thumbnails_right()
+        self.progress_var.set(0)
+
+    
 
     def show_image(self):
         if self.current_index < len(self.image_files):
@@ -575,8 +646,117 @@ class Presorter:
         self.fenster = sc.Fenster(Dialog, categories)
 
         Dialog.update()
-
     
+    def accept_ai_labelling(self):
+        """
+        liest absolute Pfade aus JSON
+        benennt Dateien im jeweiligen Ursprungs-Ordner um (Kategorie_Dateiname.ext)
+        speichert alles in self.action_history für Undo
+        """
+        # 1) Ordner bestimmen, in dem die JSON liegen sollte
+        base_folder = getattr(self, "clip_results_folder", None) or self.image_folder
+
+        results_path = os.path.join(base_folder, "clip_results.json")
+        if not os.path.exists(results_path):
+            messagebox.showwarning(
+                "AI-Labelling",
+                "Keine CLIP-Ergebnisse gefunden (clip_results.json).\n"
+                "Führe zuerst CLIP-Kategorienvorschau aus.",
+                parent=self.root,
+            )
+            return
+
+        try:
+            with open(results_path, "r", encoding="utf-8") as f:
+                category_files = json.load(f)  # {kategorie: [absolute_pfade]}
+            total_files = sum(len(files) for files in category_files.values())
+
+            if not total_files:
+                messagebox.showinfo(
+                    "AI-Labelling",
+                    "Keine Bilder klassifiziert.",
+                    parent=self.root,
+                )
+                os.remove(results_path)
+                return
+
+            if not messagebox.askyesno(
+                "AI-Labelling akzeptieren",
+                f"{total_files} Bilder aus CLIP-Ergebnissen übernehmen?\n"
+                "Das benennt im Ursprungsordner um (Kategorie_Dateiname.ext).\n"
+                "Undo mit Strg+Z möglich.",
+                parent=self.root,
+            ):
+                return
+
+            batch_history = []
+            processed = 0
+
+            for cat, files in category_files.items():
+                for src_path in files:
+                    # Quelle muss existieren
+                    if not os.path.exists(src_path):
+                        print(f"[AI-Labelling] Quelle fehlt, überspringe: {src_path}")
+                        continue
+
+                    base_dir = os.path.dirname(src_path)
+                    original_name = os.path.basename(src_path)
+
+                    # Doppelte Labels vermeiden
+                    if original_name.startswith(f"{cat}_"):
+                        new_name = original_name
+                    else:
+                        new_name = f"{cat}_{original_name}"
+
+                    dst_path = os.path.join(base_dir, new_name)
+
+                    # Konflikt-Handling
+                    counter = 1
+                    stem, ext = os.path.splitext(new_name)
+                    while os.path.exists(dst_path):
+                        new_name_alt = f"{stem}_{counter}{ext}"
+                        dst_path = os.path.join(base_dir, new_name_alt)
+                        counter += 1
+
+                    os.rename(src_path, dst_path)
+                    batch_history.append((src_path, dst_path))
+                    processed += 1
+
+            # Historie erweitern (Undo-fähig)
+            self.action_history.extend(reversed(batch_history))
+
+            # JSON aufräumen
+            os.remove(results_path)
+
+            # GUI aktualisieren
+            self.set_image_folder(self.image_folder)
+            self.progress_var.set(0)
+
+            messagebox.showinfo(
+                "AI-Labelling",
+                f"{processed} Bilder automatisch gelabelt. JSON gelöscht.",
+                parent=self.root,
+            )
+
+            self.accept_ai_button.config(state=tk.DISABLED)
+            self.clip_results_loaded = False
+
+            if hasattr(es, "backup_folder") and es.backup_folder(self.image_folder):
+                print("[AI-Labelling] Backup nach Akzeptieren erstellt.")
+
+        except Exception as e:
+            messagebox.showerror(
+                "AI-Labelling Fehler",
+                f"Fehler beim Akzeptieren:\n{e}",
+                parent=self.root,
+            )
+    def _on_clip_finished(self, folder_path: str):
+        # Ordner mit clip_results.json merken
+        self.clip_results_folder = folder_path
+        self.clip_results_loaded = True
+        self.accept_ai_button.config(state=tk.NORMAL)
+
+        
 
 def wait_for_image_folder_and_backup():
     while app.image_folder == None:

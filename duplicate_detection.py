@@ -10,7 +10,8 @@ IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'}
 
 
 def _hash_file(file_path: Path, chunk_size: int = 8192) -> str:
-    """Berechne MD5 Hash einer Datei."""
+
+    #MD5
     md5 = hashlib.md5()
     with open(file_path, 'rb') as f:
         while chunk := f.read(chunk_size):
@@ -19,7 +20,8 @@ def _hash_file(file_path: Path, chunk_size: int = 8192) -> str:
 
 
 def _find_exact_duplicates(folder_path: str) -> dict:
-    """Finde Duplikate, gibt {hash: [pfade]} zurück."""
+
+    #Finde exakte Duplikate (vielleicht mach ich später noch eine für ähnliche bilder?)
     folder = Path(folder_path)
     if not folder.exists():
         raise FileNotFoundError(f"Ordner nicht gefunden: {folder_path}")
@@ -36,7 +38,7 @@ def _find_exact_duplicates(folder_path: str) -> dict:
 
 
 def _delete_duplicates(duplicates: dict) -> int:
-    """Lösche alle Duplikate, behalte die erste Datei."""
+
     deleted = 0
     for files in duplicates.values():
         for f in files[1:]:
@@ -49,7 +51,7 @@ def _delete_duplicates(duplicates: dict) -> int:
 
 
 def _move_duplicates(duplicates: dict, target_folder: str) -> int:
-    """Verschiebe Duplikate in Zielordner."""
+    # Duplikate in irgendeinen Ordner packen
     target = Path(target_folder)
     target.mkdir(exist_ok=True)
     
@@ -71,20 +73,16 @@ def _move_duplicates(duplicates: dict, target_folder: str) -> int:
 
 
 def run_duplicate_check_gui(folder_path: str, parent: tk.Tk | tk.Toplevel | None = None) -> None:
-    """
-    Starte Duplikat-Check als kleines Tkinter-Fenster.
     
-    Args:
-        folder_path: Ordner, in dem gesucht werden soll.
-        parent: Tkinter root oder Toplevel (für Modalität / Zentrierung).
-    """
+    #Duplikatcheck
+    
     duplicates = _find_exact_duplicates(folder_path)
     
     if not duplicates:
         messagebox.showinfo("Duplikat-Check", "Keine Duplikate gefunden.", parent=parent)
         return
     
-    # Statistiken berechnen
+    # Statistiken
     group_count = len(duplicates)
     dup_files = sum(len(files) - 1 for files in duplicates.values())
     wasted_mb = 0.0
@@ -94,7 +92,7 @@ def run_duplicate_check_gui(folder_path: str, parent: tk.Tk | tk.Toplevel | None
         size_mb = os.path.getsize(files[0]) / (1024 * 1024)
         wasted_mb += size_mb * (len(files) - 1)
     
-    # Kleines Toplevel-Dialogfenster erstellen
+    # Dialogfenster
     dialog = tk.Toplevel(parent)
     dialog.title("Duplikat-Check")
     dialog.transient(parent)  # Über Parent-Fenster hängen
@@ -139,7 +137,7 @@ def run_duplicate_check_gui(folder_path: str, parent: tk.Tk | tk.Toplevel | None
     btn_move.grid(row=0, column=1, padx=5)
     btn_cancel.grid(row=0, column=2, padx=5)
     
-    # Fenster zentrieren (optional)
+    # Fenster zentrieren
     dialog.update_idletasks()
     if parent is not None:
         px = parent.winfo_rootx()
