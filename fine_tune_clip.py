@@ -6,6 +6,7 @@ from torch.nn import CrossEntropyLoss
 from PIL import Image
 import json
 from pathlib import Path
+import argparse
 import torchvision.transforms as transforms
 
 # Anomaly Detection deaktivieren
@@ -42,11 +43,10 @@ class CustomCLIPDataset(Dataset):
         text = clip.tokenize(item['text'])[0]
         return image, text
 
-def fine_tune_clip(json_path: str = 'clip_dataset.json', epochs: int = 3, batch_size: int = 16, lr: float = 1e-5, device: str = None, temperature: float = 0.07):
+def fine_tune_clip(json_path: str = 'clip_dataset.json', epochs: int = 3, batch_size: int = 16, 
+                lr: float = 1e-5, device: str = None, temperature: float = 0.07):
     
     #Finetunt CLIP auf der Json
-    
-
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Fine-Tuning auf {device}...")
@@ -108,5 +108,15 @@ def fine_tune_clip(json_path: str = 'clip_dataset.json', epochs: int = 3, batch_
     torch.save(model.state_dict(), save_path)
     print(f"Fine-tuned Modell gespeichert: {save_path}")
 
+
+# Minimaler CLI-Wrapper (außerhalb der Funktion; nur für Button-Übergabe)
+def main():
+    parser = argparse.ArgumentParser(description="Fine-Tune CLIP on JSON Dataset")
+    parser.add_argument('json_path', nargs='?', default='clip_dataset.json', help="Pfad zum JSON-Dataset")
+    args = parser.parse_args()
+    fine_tune_clip(args.json_path)
+
+
 if __name__ == "__main__":
-    fine_tune_clip()  # Automatisch mit clip_dataset.json
+    main()
+

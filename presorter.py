@@ -11,6 +11,7 @@ from tkinter import ttk, filedialog,messagebox,PhotoImage
 from PIL import Image, ImageTk
 import ttkbootstrap as ttkb
 import threading
+import subprocess
 import csv
 import time
 import json
@@ -23,6 +24,7 @@ import manager as ma
 import einsortieren as es
 import duplicate_detection as dd
 import clip_classifier as cc
+import fine_tune_clip as ft
  
 
 
@@ -246,11 +248,13 @@ class Presorter:
         btn_new_folder.pack(side=tk.TOP, padx=5, pady=5)
 
         #button to create folders 
-        add_category_button = ttkb.Button(self.button_frame_add, 
-                                        text="In Ordner sortieren", 
-                                        command= lambda: es.sortiere_bilder(self.image_folder) ,
-                                        style="Warning.TButton")
-        add_category_button.pack(side=tk.TOP,padx=5,pady=5)
+        
+        ttkb.Button(
+            self.button_frame_add,
+            text="In Ordner sortieren",
+            command=lambda: [es.sortiere_bilder(self.image_folder), self.check_and_enable_finetune()],
+            style="Warning.TButton"
+        ).pack(side=tk.TOP, padx=5, pady=5)
 
         #button to reset categories 
         add_category_button = ttkb.Button(self.button_frame_add, 
@@ -300,6 +304,16 @@ class Presorter:
             state=tk.DISABLED  # deaktiviert bis CLIP fertig
         )
         self.accept_ai_button.pack(side=tk.TOP, padx=5, pady=5)
+
+        # Button für CLIP Fine-Tuning 
+        self.finetune_button = ttkb.Button(
+            self.button_frame_add,
+            text="CLIP Fine-Tuning starten",
+            command=lambda: self._fine_tune(),
+            style="Warning.TButton",
+            state=tk.DISABLED  # deaktiviert bis CLIP fertig
+        )
+        self.finetune_button.pack(side=tk.TOP, padx=5, pady=5)
 
         #button to save categories to csv
         add_category_button = ttkb.Button(self.button_frame, 
@@ -457,6 +471,12 @@ class Presorter:
             return
 
         self.image_folder = folder_path
+
+        #Reset: Disable finetuning nach Folder-Wechsel
+        if hasattr(self, 'finetune_button'):
+            self.finetune_button.config(state=tk.DISABLED)
+            print("Fine-Tuning disabled nach Ordner-Wechsel.")
+            
         self.image_files = [
             f for f in os.listdir(self.image_folder)
             if f.lower().endswith((".png", ".jpg", ".jpeg", ".bmp", ".gif", ".webp"))
@@ -478,6 +498,8 @@ class Presorter:
         self.update_thumbnails_left()
         self.update_thumbnails_right()
         self.progress_var.set(0)
+
+        self.check_and_enable_finetune()
 
     
 
@@ -648,11 +670,10 @@ class Presorter:
         Dialog.update()
     
     def accept_ai_labelling(self):
-        """
-        liest absolute Pfade aus JSON
-        benennt Dateien im jeweiligen Ursprungs-Ordner um (Kategorie_Dateiname.ext)
-        speichert alles in self.action_history für Undo
-        """
+        
+        # liest absolute Pfade aus JSON und benennt Dateien im jeweiligen Ursprungs-Ordner um
+        
+        
         # 1) Ordner bestimmen, in dem die JSON liegen sollte
         base_folder = getattr(self, "clip_results_folder", None) or self.image_folder
 
@@ -722,7 +743,7 @@ class Presorter:
                     batch_history.append((src_path, dst_path))
                     processed += 1
 
-            # Historie erweitern (Undo-fähig)
+            # History erweitern
             self.action_history.extend(reversed(batch_history))
 
             # JSON aufräumen
@@ -750,12 +771,135 @@ class Presorter:
                 f"Fehler beim Akzeptieren:\n{e}",
                 parent=self.root,
             )
+
     def _on_clip_finished(self, folder_path: str):
         # Ordner mit clip_results.json merken
         self.clip_results_folder = folder_path
         self.clip_results_loaded = True
         self.accept_ai_button.config(state=tk.NORMAL)
 
+        # Fine-Tuning aktivieren, wenn kategorisiert
+        self.image_folder = folder_path
+        if hasattr(self, 'finetune_button') and self._has_categories(folder_path):
+            self.finetune_button.config(state=tk.NORMAL)
+            print("Fine-Tuning-Button aktiviert.")
+        else:
+            self.finetune_button.config(state=tk.DISABLED)
+
+        self.image_folder = folder_path
+        self.check_and_enable_finetune()  # Aktiviert Fine-Tuning nach CLIP
+
+    def check_and_enable_finetune(self):
+        
+        #Prüft, ob self.image_folder kategorisiert ist, und enabled den Fine-Tuning-Button.
+        
+        if not hasattr(self, 'finetune_button') or not hasattr(self, 'image_folder'):
+            return
+        
+        if self._has_categories(self.image_folder): 
+            self.finetune_button.config(state=tk.NORMAL)
+            print("Fine-Tuning-Button aktiviert: Ordner kategorisiert.")
+        else:
+            self.finetune_button.config(state=tk.DISABLED)
+            print("Fine-Tuning-Button deaktiviert: Keine Kategorien.")
+
+
+    def _fine_tune(self):
+        if not hasattr(self, 'image_folder') or not self.image_folder:
+            messagebox.showwarning("Warnung", "Kein Ordner ausgewählt!")
+            return
+        
+        if not self._has_categories(self.image_folder):
+            messagebox.showwarning("Warnung", "Ordner nicht kategorisiert (nicht alle Bilder gelabelt)!")
+            return
+
+        def run_finetune():
+            try:
+                folder = self.image_folder
+                script_dir = os.path.dirname(os.path.abspath(__file__))  # \Presorter-Ordner
+                json_path = os.path.join(script_dir, 'clip_dataset.json')
+                python_exe = sys.executable  # Vollpfad zu venv-Python (z. B. ...\.venv\Scripts\python.exe)
+
+                print(f"Verwende Python: {python_exe}")  # Debug: Zeigt venv-Pfad
+
+                # Dataset-Script mit venv-Python aufrufen
+                dataset_full_path = os.path.join(script_dir, 'dataset_creator.py')
+                if not os.path.exists(dataset_full_path):
+                    raise FileNotFoundError(f"dataset_creator.py nicht in {script_dir} gefunden.")
+                result_dataset = subprocess.run([
+                    python_exe, dataset_full_path,  # sys.executable statt 'python'
+                    folder, json_path
+                ], check=True, capture_output=True, text=True, cwd=script_dir)
+                print(f"Dataset-Output: {result_dataset.stdout}")
+                if result_dataset.stderr:
+                    print(f"Dataset-Warnung: {result_dataset.stderr}")
+
+                # Fine-Tuning-Script mit venv-Python aufrufen
+                finetune_full_path = os.path.join(script_dir, 'fine_tune_clip.py')  # Oder 'fine_tune.py'
+                if not os.path.exists(finetune_full_path):
+                    raise FileNotFoundError(f"fine_tune_clip.py nicht in {script_dir} gefunden.")
+                result_finetune = subprocess.run([
+                    python_exe, finetune_full_path,  # sys.executable statt 'python'
+                    json_path
+                ], check=True, capture_output=True, text=True, cwd=script_dir)
+                print(f"Fine-Tune-Output: {result_finetune.stdout}")
+                if result_finetune.stderr:
+                    print(f"Fine-Tune-Warnung: {result_finetune.stderr}")
+                print("Fine-Tuning abgeschlossen! Modell: fine_tuned_clip.pt")
+
+                # Aufräumen
+                if os.path.exists(json_path):
+                    os.remove(json_path)
+                self.root.after(0, lambda: messagebox.showinfo("Erfolg", "Fine-Tuning erfolgreich!\nModell: fine_tuned_clip.pt"))
+
+            except FileNotFoundError as e:
+                err = f"Datei-Fehler: {e}\nScripts müssen in {script_dir} liegen."
+                print(err)
+                self.root.after(0, lambda: messagebox.showerror("Fehler", err))
+
+            except subprocess.CalledProcessError as e:
+                err = e.stderr if e.stderr else "Script-Fehler (torch/CLIP?)."
+                print(f"Subprocess-Fehler: {err}")
+                self.root.after(0, lambda: messagebox.showerror("Fehler", f"Script-Fehler:\n{err}\nOrdner: {folder}"))
+
+            except Exception as e:
+                print(f"Fehler: {e}")
+                self.root.after(0, lambda: messagebox.showerror("Fehler", f"Unerwarteter Fehler: {e}"))
+
+        threading.Thread(target=run_finetune, daemon=True).start()
+
+
+    def _has_categories(self, folder):
+
+        # Prüft, ob der Ordner kategorisiert ist (Subordner oder Präfixe)
+        
+        if not os.path.exists(folder):
+            return False
+        
+        # Subordner prüfen (z. B. nach "In Ordner sortieren")
+        subfolders = [d for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d)) and not d.startswith('.')]
+        if len(subfolders) >= 1:  # Mind. 1 Kategorie-Ordner = gelabelt
+            return True
+        
+        # Prefixe in Dateinamen prüfen (für vor-Sort-Phase)
+        image_exts = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp')
+        all_images = [f for f in os.listdir(folder) if f.lower().endswith(image_exts)]
+        if len(all_images) == 0:
+            return False  # Keine Bilder = nichts zu tun
+        
+        prefixed_images = [f for f in all_images if '_' in f.rsplit('.', 1)[0]]  # "_" vor Extension
+        num_prefixed = len(prefixed_images)
+        percent_labeled = (num_prefixed / len(all_images)) * 100 if all_images else 0
+        
+        # Streng: >=400 prefixed oder >=80% gelabelt
+        is_labeled = num_prefixed >= 400 or percent_labeled >= 80  #<------- evtl später anpassen?
+        
+        if is_labeled:
+            print(f"Labels erkannt: {num_prefixed}/{len(all_images)} Bilder prefixed ({percent_labeled:.1f}%)")
+        else:
+            print(f"Zu wenige Labels: {num_prefixed}/{len(all_images)} prefixed ({percent_labeled:.1f}%) – Brauche >=20% oder 5+.")
+        
+        return is_labeled
         
 
 def wait_for_image_folder_and_backup():

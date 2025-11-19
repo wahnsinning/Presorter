@@ -3,7 +3,7 @@ import json
 import random 
 from pathlib import Path
 from typing import List, Dict
-
+import argparse 
 
 try:
     from tqdm import tqdm
@@ -12,9 +12,10 @@ except ImportError:
     TQDM_AVAILABLE = False
     print("tqdm nicht installiert. Verwende einfache Prints für Fortschritt.")
 
-def create_dataset(folder_path: str, debug: bool = False, max_per_category: int = 50, use_min_balance: bool = False) -> str:
+
+def create_dataset(folder_path: str, json_path: str, debug: bool = False, max_per_category: int = 50, use_min_balance: bool = False) -> str:
     
-    #Erstellt balancierte JSON-Datei mit Bild-Text-Paaren für CLIP-Fine-Tuning.
+    # Erstellt balancierte JSON-Datei mit Bild-Text-Paaren für CLIP-Fine-Tuning.
     
     if not os.path.isdir(folder_path):
         raise ValueError(f"Ordner nicht gefunden: {folder_path}")
@@ -101,8 +102,6 @@ def create_dataset(folder_path: str, debug: bool = False, max_per_category: int 
         print(f"Gesamt balanciertes Dataset: {total_sampled} Paare aus {len(category_files)} Kategorien.")
     
     # Schritt 4: JSON speichern
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    json_path = os.path.join(script_dir, 'clip_dataset.json')
     if debug:
         print("Schreibe balancierte JSON...")
     with open(json_path, 'w', encoding='utf-8') as f:
@@ -111,12 +110,26 @@ def create_dataset(folder_path: str, debug: bool = False, max_per_category: int 
     print(f"Balanciertes Dataset erstellt: {json_path} mit {len(dataset)} Paaren.")
     return json_path
 
-'''
+
+# CLI-Wrapper mit argparse 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Erstelle CLIP Dataset aus kategorisiertem Ordner")
+    parser.add_argument('folder_path', help="Pfad zum Ordner mit kategorisierten Bildern (Prefix-Labels)")
+    parser.add_argument('json_path', nargs='?', default='clip_dataset.json', help="Ausgabe-JSON-Pfad (default: clip_dataset.json)")
+    parser.add_argument('--debug', action='store_true', help="Debug-Modus (Logs)")
+    parser.add_argument('--max_per_category', type=int, default=50, help="Max. Bilder pro Kategorie (default: 50)")
+    parser.add_argument('--use_min_balance', action='store_true', help="Balancieren auf kleinste Kategorie (default: max_per_category)")
     
-    folder_path = r'C:/Users/Silas/Desktop/test' 
+    args = parser.parse_args()
+    
     try:
-        create_dataset(folder_path, debug=True, use_min_balance=True)
+        create_dataset(
+            folder_path=args.folder_path,
+            json_path=args.json_path,
+            debug=args.debug,
+            max_per_category=args.max_per_category,
+            use_min_balance=args.use_min_balance
+        )
     except ValueError as e:
         print(f"Fehler: {e}")
-'''
+        exit(1)

@@ -1,32 +1,43 @@
-P R E S O R T E R 
+# P R E S O R T E R
 
-Ein Werkzeug zur effizienten manuellen Kategorisierung von Bildern mit einer modernen, vollbildfähigen GUI.
-
+Ein Werkzeug zur effizienten manuellen und KI-gestützten Kategorisierung von Bildern mit einer modernen, vollbildfähigen GUI.
 
 Über das Projekt
 
-Presorter ist eine Desktop-Anwendung, die das manuelle Sortieren großer Bildmengen vereinfacht. Sie ermöglicht die schnelle Kategorisierung durch Hinzufügen von Kategorie-Präfixen zu Dateinamen.
+Presorter ist eine Desktop-Anwendung, die das Sortieren großer Bildsammlungen vereinfacht. Sie kombiniert manuelles Labelling durch Prefix-Änderungen an Dateinamen mit KI-Unterstützung via CLIP für Zero-Shot-Klassifikation. Nach erster Manueller Sichtung der kategorisierten Daten ist ein Fine-Tuning des Modells auf benutzerdefinierten Datasets möglich. Das Tool ist lokal und offline, schützt die Privatsphäre und eignet sich ideal für chaotische Foto-Ordner.​
+
+### Hauptfunktionen
+
+Intuitive Bildanzeige mit Vollbildmodus und Thumbnail-Vorschau (vorherige/nächste drei Bilder)
+
+Dynamische Kategorien: Beliebig viele laden, manuell hinzufügen oder via Eingabefeld erweitern
+
+Undo-Funktion und History für Aktionen
+
+Bildrotation und Navigation (Pfeiltasten)
+
+Fortschrittsanzeige mit Progress-Bar 
+
+Automatisches Backup vor Sortiervorgängen
+
+Sortieren in Ordner, Prefix-Entfernen und Zurücksetzen
+
+KI-Integration: OpenAI CLIP für Zero-Shot-Klassifikation
+
+AI-Labelling: Button zum Akzeptieren von CLIP-Vorschlägen
+
+Duplicate-Detection: MD5-basierte Erkennung und Entfernung von Duplikaten
+
+Fine-Tuning: PyTorch-basiertes Training auf generierten Datasets
 
 
-Hauptfunktionen
+### Voraussetzungen
 
-- Intuitive Bildanzeige mit Vollbildmodus
-- Dynamische Kategorien - Füge beliebig viele Kategorien hinzu
-- Thumbnail-Vorschau der vorherigen und kommenden Bilder
-- Undo-Funktion
-- Bildrotation
-- Fortschrittsanzeige
-- Automatisches Backup vor dem Sortiervorgang
-- Batch-Operationen zum Sortieren in Ordner, Entpacken und Zurücksetzen
+Python 3.8 oder höher
+Windows
+Git
 
-Installation
-
-Voraussetzungen
-
-- Python 3.8 oder höher
-- Windows (aufgrund spezifischer Windows-API-Aufrufe)
-
-Setup
+### Setup
 
 1. Repository klonen:
 git clone https://github.com/wahnsinning/Presorter.git
@@ -38,68 +49,65 @@ python -m venv .venv
 .venv\Scripts\activate
 
 
-3. Abhängigkeiten installieren:
+3. Bibliotheken installieren:
 pip install -r requirements.txt
 
+(Erster Start von CLIP lädt Modelle herunter: Internet erforderlich, danach offline)
 
 
-Dependencies
+### Workflow
 
-tkinter
-ttkbootstrap
-Pillow
+1. Setup-Fenster: 
+   Beim ersten Start wähle Backup-Erstellung und Kategorien-Laden
 
+2. Ordner auswählen: 
+   Wähle den Bildordner
 
+3. Kategorien einstellen: 
+   Füge deine persönlichen Kategorien hinzu oder entferne sogar die Default-Kategorien (In letzterem Fall ist "Kategorien speichern" und ein Neustart des Programms erforderlich. Beim nächsten Start sollte "Kategorien laden" angeklickt werden)
 
-Verwendung
+4. KI-gestützte Vorkategorisierung:
+   (Zero-shot, nicht ganz präzise, je nachdem wie abstrakt die Kategorien sind)
+   Es empfiehlt sich, bei großen Datenmengen für diese Vorkategorisierung nur einen Teil zu benutzen, da dieser Teil manuell gesichtet und korrigiert werden sollte, um das Modell optimal zu finetunen. (Das kann Zeit beanspruchen.) (Keine Sorge, auch bei einem geringen Datenset wird das Modell schon gut (bis zu +20% Accuracy gegenüber Zero-Shot) trainiert, da die wenigen verfügbaren Daten augmentiert werden. Wichtig ist allerdings zu wissen, dass die Größe der Kategorie mit den wenigsten Bildern ausschlaggebend für die maximale Anzahl der verwendeten Bilder der übrigen Kategorien ist.(Balancing) Die kleinste Kategorie sollte mindestens 10 Bilder enthalten.)
 
-Starten der Anwendung
+   - Button "CLIP Kategorienvorschau" um die Kategorisierung zu starten. Es öffnet sich ein Fenster mit der Vorschau über wie viele Bilder in jeder Kategorie vorhanden sind. Die können jetzt einzeln inspiziert werden, aber besser ist, man schließt dieses Fenster erst und klickt... 
 
-python Presorter/presorter.py
+   - "AI-Labelling akzeptieren": Das wendet Vorschläge an und labelt alle Dateien automatisch
 
+5. Manuelle Sichtung
 
+   - "In Ordner Sortieren"
 
-Workflow
+   - "Anderen Ordner Öffnen" und Kategorie zur Sichtung auswählen, kurz drüber fliegen, ggf. neu Kategorisieren mit der zuvor genannten Methode. Idealerweise alle Kategorien durchgehen und die bilder so gut kategorisieren wie möglich.
 
-1. Setup-Fenster: Beim ersten Start wähle aus, ob ein Backup erstellt und gespeicherte Kategorien geladen werden sollen
-2. Ordner auswählen: Wähle den Ordner mit den zu sortierenden Bildern
-3. Kategorisieren: 
-   - Klicke auf einen Kategorie-Button, um das aktuelle Bild zu kategorisieren
-   - Oder füge neue Kategorien über das Eingabefeld hinzu
-4. Navigation: Nutze die Thumbnail-Vorschau oder die Undo-Funktion
-5. Abschluss: Sortiere die kategorisierten Bilder in Ordner mit den oben rechts verfügbaren Buttons
+6. Finetuning 
+   Wenn alles fertig kategorisiert ist und du dir sicher bist, dass wenig bis keine unpassenden Bilder in den jeweiligen Kategorien liegen, drücke auf...
 
-Tastenkombinationen
+   - "CLIP-Finetuning starten": Das Modell ändert nun seine Gewichte, um beim nächsten Mal besser zu erkennen, was in welche Kategorie sortiert werden soll.
 
-| Taste       | Funktion 
-|-------------|---------------------------------------
-| `Enter`     | Neue Kategorie hinzufügen 
-| `Strg + R`  | Bild um 90° drehen 
-| `←` (Links) | Letzte Aktion rückgängig machen 
-| `ESC`       | Vollbildmodus umschalten 
-
-Projektstruktur
-
-Presorter/
-├── Presorter/
-│ ├── presorter.py 	# Hauptanwendung
-│ ├── setup.py 	# Setup-Fenster
-│ ├── manager.py 	# Kategorieverwaltung
-│ ├── save_cat.py 	# CSV-Speicherverwaltung
-│ ├── einsortieren.py 	# Batch-Operationen
-│ └── icons/ 		# UI-Icons
-├── Kategorien.csv 	# Gespeicherte Kategorien
-├── requirements.txt 	
-└── README.md
+7. Große Dateisortierungen
+   Jetzt kannst du zu riesigen Dateiordnern wechseln, unübersichtlich benannte Ordner mit einem Klick automatisiert entpacken, alle Bilder mit deinem speziell personalisierten Modell klassifizieren, sie mit einem Klick automatisiert in Ordner sortieren, vielleicht stichprobenartig die Kategorisierungen inspizieren; Zack fertig: Übersichtiliche Dateien auf deiner Festplatte :)
 
 
-Konfiguration
+### Weitere Tools:
 
-Kategorien speichern
+"Duplikatprüfung": MD5-Scan und Entfernung
 
-Kategorien werden automatisch in `Kategorien.csv` gespeichert. Die Datei wird beim ersten Start erstellt und kann für zukünftige Sitzungen wiederverwendet werden.
+"Dateinamen zurücksetzen": Sortierung rückgängig machen
 
-Themes
+
+### Tastenkombinationen
+
+| Taste              | Funktion 
+|--------------------|---------------------------------------
+| `Enter`            | Neue Kategorie hinzufügen 
+| `Strg + R`         | Bild um 90° drehen 
+| `Pfeiltaste Links` | Letzte Aktion rückgängig machen 
+| `ESC`              | Vollbildmodus umschalten 
+
+
+
+### Themes
 
 Die Anwendung nutzt das "solar" Theme von ttkbootstrap. Andere Themes können durch Ändern des `theme`-Parameters aktiviert werden:
 
@@ -107,25 +115,21 @@ app = Presorter(root, theme='darkly') # Alternativen: 'flatly', 'cyborg', etc.
 
 
 
-Bekannte Probleme
+### Bekannte Probleme
 
-- Administrator-Rechte: Die Anwendung fordert Admin-Rechte an, funktioniert aber auch ohne
 - Skip-Button: Derzeit deaktiviert, weil das den prozessablauf verkompliziert und evtl die Usability behindert
 - Plattform: Nur für Windows
 
 
-Verbesserungsvorschläge
 
-- Entfernung der unnötigen Admin-Rechte-Anforderung
-- Refactoring: Trennung von UI und Geschäftslogik
-- Cross-Platform-Support (Linux, macOS)
-- Konfigurationsdatei statt CSV (YAML/TOML)
+### Rechtliches
 
-Lizenz: MIT-Lizenz 
+Lizenz: MIT-Lizenz
 
-Autor
+Autor: Silas Sinning
 
-Silas Sinning
-
-Erstellt: 2023
+Hauptprogramm erstellt: 2023
 Mit Unterstützung von: ChatGPT-3
+
+KI-Integration erstellt: 2025
+Mit Unterstützung von GROK 4
